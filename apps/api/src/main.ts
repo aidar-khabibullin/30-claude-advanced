@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify'
 import { AppModule } from './app.module'
+import { UPLOAD_DIR } from './config/upload-dir'
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter())
@@ -16,8 +17,7 @@ async function bootstrap() {
     },
   })
 
-  const uploadDir = process.env['UPLOAD_DIR'] ?? './uploads'
-  await fs.promises.mkdir(uploadDir, { recursive: true })
+  await fs.promises.mkdir(UPLOAD_DIR, { recursive: true })
 
   await app.listen(3001, '0.0.0.0')
 }

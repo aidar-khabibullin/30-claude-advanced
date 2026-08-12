@@ -1,6 +1,6 @@
 import { BadRequestException, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common'
 import { CommandBus, QueryBus } from '@nestjs/cqrs'
-import type {} from '@fastify/multipart'
+import type { MultipartFile } from '@fastify/multipart'
 import { FastifyRequest } from 'fastify'
 import { JwtGuard } from '../auth/guards/jwt.guard'
 import { UploadFileCommand } from './commands/upload-file.command'
@@ -18,7 +18,13 @@ export class MeetingFileController {
 
   @Post()
   async upload(@Req() req: AuthRequest, @Param('id') meetingId: string) {
-    const data = await req.file()
+    let data: MultipartFile | undefined
+
+    try {
+      data = await req.file()
+    } catch {
+      throw new BadRequestException('Invalid multipart request')
+    }
 
     if (!data) {
       throw new BadRequestException('File is required')

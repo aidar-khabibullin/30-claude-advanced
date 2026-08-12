@@ -30,8 +30,8 @@ describe('MeetingFiles (e2e)', () => {
     await app.getHttpAdapter().getInstance().ready()
 
     prisma = app.get(PrismaService)
-    await prisma.$executeRawUnsafe(`DELETE FROM "MeetingFile" WHERE TRUE`).catch(() => null)
-    await prisma.$executeRawUnsafe(`DELETE FROM "Meeting" WHERE TRUE`).catch(() => null)
+    await prisma.meetingFile.deleteMany()
+    await prisma.meeting.deleteMany()
     await prisma.user.deleteMany()
 
     const res = await request(app.getHttpServer())
@@ -51,8 +51,8 @@ describe('MeetingFiles (e2e)', () => {
   })
 
   afterAll(async () => {
-    await prisma.$executeRawUnsafe(`DELETE FROM "MeetingFile" WHERE TRUE`).catch(() => null)
-    await prisma.$executeRawUnsafe(`DELETE FROM "Meeting" WHERE TRUE`).catch(() => null)
+    await prisma.meetingFile.deleteMany()
+    await prisma.meeting.deleteMany()
     await prisma.user.deleteMany()
     await app.close()
     fs.rmSync(path.join(testUploadDir, 'meetings', meetingId), { recursive: true, force: true })
@@ -107,6 +107,21 @@ describe('MeetingFiles (e2e)', () => {
           contentType: 'text/plain',
         })
         .expect(404)
+    })
+
+    it('201: имя файла с path traversal сохраняется без выхода за пределы папки загрузки', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/files`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', Buffer.from('dummy content'), {
+          filename: '../../../../etc/traversal.txt',
+          contentType: 'text/plain',
+        })
+        .expect(201)
+
+      expect(res.body.filePath).not.toContain('..')
+      expect(fs.existsSync(res.body.filePath)).toBe(true)
+      expect(path.resolve(res.body.filePath).startsWith(path.resolve(testUploadDir))).toBe(true)
     })
   })
 
