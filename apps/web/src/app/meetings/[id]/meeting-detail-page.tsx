@@ -1,11 +1,15 @@
 'use client'
 
-import { Button, Card, Spinner } from '@heroui/react'
+import { Button, Card, ProgressBar, Spinner } from '@heroui/react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { API_URL, formatDate } from '@/lib/api'
 import { clearToken, getToken } from '@/lib/auth'
+
+// Держать в синхроне с лимитом fileSize в apps/api/src/main.ts
+const MAX_FILE_SIZE_MB = 100
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024
 
 interface Meeting {
   id: string
@@ -79,6 +83,26 @@ function TrashIcon() {
       <path d="M10 11v6" />
       <path d="M14 11v6" />
       <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
+    </svg>
+  )
+}
+
+function UploadIcon() {
+  return (
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+      <path d="M17 8l-5-5-5 5" />
+      <path d="M12 3v12" />
     </svg>
   )
 }
@@ -166,6 +190,23 @@ function FileTypeIcon({ mimeType }: { mimeType: string }) {
   return <FileIconBase>{shape}</FileIconBase>
 }
 
+function describeUploadError(xhr: XMLHttpRequest): string {
+  let code = ''
+  try {
+    code = JSON.parse(xhr.responseText)?.code ?? ''
+  } catch {
+    // ответ не JSON — используем сообщение по умолчанию
+  }
+
+  if (code === 'FILE_TOO_LARGE') {
+    return `Файл слишком большой — максимальный размер ${MAX_FILE_SIZE_MB} МБ`
+  }
+  if (code === 'FILE_TYPE_NOT_ALLOWED') {
+    return 'Недопустимый тип файла. Разрешены: видео, аудио, PDF, DOCX, XLSX, PPTX, TXT'
+  }
+  return 'Не удалось загрузить файл'
+}
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} Б`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`
@@ -220,6 +261,97 @@ function FileRow({
   )
 }
 
+function UploadZone({
+  isUploading,
+  uploadProgress,
+  onSelectFile,
+}: {
+  isUploading: boolean
+  uploadProgress: number
+  onSelectFile: (file: File) => void
+}) {
+  const [isDragging, setIsDragging] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setIsDragging(false)
+    if (isUploading) return
+    const file = e.dataTransfer.files[0]
+    if (file) onSelectFile(file)
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={isUploading ? -1 : 0}
+      aria-label="Загрузить файл"
+      aria-disabled={isUploading}
+      onClick={() => !isUploading && inputRef.current?.click()}
+      onKeyDown={(e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && !isUploading) {
+          e.preventDefault()
+          inputRef.current?.click()
+        }
+      }}
+      onDragOver={(e) => {
+        e.preventDefault()
+        if (!isUploading) setIsDragging(true)
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setIsDragging(false)
+      }}
+      onDrop={handleDrop}
+      className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-2 px-4 py-8 text-center transition-colors"
+      style={{
+        cursor: isUploading ? 'default' : 'pointer',
+        borderColor: isDragging
+          ? 'var(--accent)'
+          : 'color-mix(in oklch, var(--foreground) 20%, transparent)',
+        background: isDragging
+          ? 'color-mix(in oklch, var(--accent) 8%, transparent)'
+          : 'transparent',
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        className="hidden"
+        disabled={isUploading}
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (file) onSelectFile(file)
+          e.target.value = ''
+        }}
+      />
+      {isUploading ? (
+        <div className="w-full max-w-xs flex flex-col items-center gap-2">
+          <ProgressBar aria-label="Загрузка файла" value={uploadProgress} className="w-full">
+            <ProgressBar.Track>
+              <ProgressBar.Fill />
+            </ProgressBar.Track>
+          </ProgressBar>
+          <p className="text-xs" style={{ color: 'var(--muted)' }}>
+            Загрузка… {uploadProgress}%
+          </p>
+        </div>
+      ) : (
+        <>
+          <span style={{ color: 'var(--muted)' }}>
+            <UploadIcon />
+          </span>
+          <p className="text-sm" style={{ color: 'var(--foreground)' }}>
+            Перетащите файл сюда или нажмите, чтобы выбрать
+          </p>
+          <p className="text-xs" style={{ color: 'var(--muted)' }}>
+            До {MAX_FILE_SIZE_MB} МБ · видео, аудио, PDF, DOCX, XLSX, PPTX, TXT
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
+
 export function MeetingDetailPage({ meetingId }: { meetingId: string }) {
   const router = useRouter()
   const [meeting, setMeeting] = useState<Meeting | null>(null)
@@ -228,6 +360,14 @@ export function MeetingDetailPage({ meetingId }: { meetingId: string }) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const activeUploadRef = useRef<XMLHttpRequest | null>(null)
+
+  useEffect(() => {
+    return () => activeUploadRef.current?.abort()
+  }, [])
 
   useEffect(() => {
     const token = getToken()
@@ -328,6 +468,55 @@ export function MeetingDetailPage({ meetingId }: { meetingId: string }) {
     }
   }
 
+  function handleUpload(file: File) {
+    const token = getToken()
+    if (!token) return
+
+    if (file.size > MAX_FILE_SIZE) {
+      setUploadError('Файл слишком большой — максимальный размер 100 МБ')
+      return
+    }
+
+    setUploadError(null)
+    setIsUploading(true)
+    setUploadProgress(0)
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const xhr = new XMLHttpRequest()
+    activeUploadRef.current = xhr
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100))
+    }
+
+    xhr.onload = () => {
+      activeUploadRef.current = null
+      setIsUploading(false)
+      if (xhr.status === 401) {
+        handleAuthExpired()
+        return
+      }
+      if (xhr.status === 201) {
+        const newFile = JSON.parse(xhr.responseText) as MeetingFile
+        setFiles((prev) => [...prev, newFile])
+        return
+      }
+      setUploadError(describeUploadError(xhr))
+    }
+
+    xhr.onerror = () => {
+      activeUploadRef.current = null
+      setIsUploading(false)
+      setUploadError('Не удалось загрузить файл')
+    }
+
+    xhr.open('POST', `${API_URL}/meetings/${meetingId}/files`)
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.send(formData)
+  }
+
   if (isLoading) {
     return (
       <div
@@ -386,9 +575,29 @@ export function MeetingDetailPage({ meetingId }: { meetingId: string }) {
               {files.length === 0 ? 'Файлов пока нет' : `Всего: ${files.length}`}
             </Card.Description>
           </Card.Header>
-          <Card.Content className="flex flex-col gap-2">
+          <Card.Content className="flex flex-col gap-3">
+            <UploadZone
+              isUploading={isUploading}
+              uploadProgress={uploadProgress}
+              onSelectFile={handleUpload}
+            />
+            {uploadError && (
+              <p
+                className="text-sm"
+                role="alert"
+                aria-live="polite"
+                style={{ color: 'var(--danger)' }}
+              >
+                {uploadError}
+              </p>
+            )}
             {actionError && (
-              <p className="text-sm mb-1" style={{ color: 'var(--danger)' }}>
+              <p
+                className="text-sm mb-1"
+                role="alert"
+                aria-live="polite"
+                style={{ color: 'var(--danger)' }}
+              >
                 {actionError}
               </p>
             )}
