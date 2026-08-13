@@ -150,4 +150,127 @@ describe('MeetingFiles (e2e)', () => {
       await request(app.getHttpServer()).get(`/meetings/${meetingId}/files`).expect(401)
     })
   })
+
+  describe('GET /meetings/:id/files/:fileId/download', () => {
+    let fileId: string
+
+    beforeAll(async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/files`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', Buffer.from('download me'), {
+          filename: 'download.txt',
+          contentType: 'text/plain',
+        })
+        .expect(201)
+
+      fileId = res.body.id
+    })
+
+    it('200: возвращает файл с корректным Content-Disposition', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/files/${fileId}/download`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200)
+
+      expect(res.headers['content-disposition']).toMatch(/attachment/)
+      expect(res.headers['content-disposition']).toMatch(/download\.txt/)
+      expect(res.text).toBe('download me')
+    })
+
+    it('401: запрос без токена', async () => {
+      await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/files/${fileId}/download`)
+        .expect(401)
+    })
+
+    it('404: файл не найден', async () => {
+      await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/files/00000000-0000-0000-0000-000000000000/download`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404)
+    })
+  })
+
+  describe('DELETE /meetings/:id/files/:fileId', () => {
+    const otherUserCredentials = { email: 'meetingfileother@example.com', password: 'Password1!' }
+    let otherToken: string
+    let noAuthFileId: string
+
+    beforeAll(async () => {
+      const res = await request(app.getHttpServer())
+        .post('/auth/register')
+        .send(otherUserCredentials)
+        .expect(201)
+
+      otherToken = res.body.token
+
+      const uploadRes = await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/files`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', Buffer.from('no auth delete attempt'), {
+          filename: 'no-auth.txt',
+          contentType: 'text/plain',
+        })
+        .expect(201)
+
+      noAuthFileId = uploadRes.body.id
+    })
+
+    it('403: чужой пользователь не может удалить файл', async () => {
+      const uploadRes = await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/files`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', Buffer.from('protected content'), {
+          filename: 'protected.txt',
+          contentType: 'text/plain',
+        })
+        .expect(201)
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/files/${uploadRes.body.id}`)
+        .set('Authorization', `Bearer ${otherToken}`)
+        .expect(403)
+    })
+
+    it('200: владелец удаляет файл, файл пропадает из списка и с диска', async () => {
+      const uploadRes = await request(app.getHttpServer())
+        .post(`/meetings/${meetingId}/files`)
+        .set('Authorization', `Bearer ${token}`)
+        .attach('file', Buffer.from('to be deleted'), {
+          filename: 'delete-me.txt',
+          contentType: 'text/plain',
+        })
+        .expect(201)
+
+      const filePath = uploadRes.body.filePath as string
+
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/files/${uploadRes.body.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200)
+
+      const listRes = await request(app.getHttpServer())
+        .get(`/meetings/${meetingId}/files`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200)
+
+      const ids = listRes.body.map((f: { id: string }) => f.id)
+      expect(ids).not.toContain(uploadRes.body.id)
+      expect(fs.existsSync(filePath)).toBe(false)
+    })
+
+    it('401: запрос без токена', async () => {
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/files/${noAuthFileId}`)
+        .expect(401)
+    })
+
+    it('404: файл не найден', async () => {
+      await request(app.getHttpServer())
+        .delete(`/meetings/${meetingId}/files/00000000-0000-0000-0000-000000000000`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(404)
+    })
+  })
 })
