@@ -7,7 +7,9 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { API_URL, formatDate } from '@/lib/api'
 import { clearToken, getToken } from '@/lib/auth'
 
-const MAX_FILE_SIZE = 100 * 1024 * 1024
+// Держать в синхроне с лимитом fileSize в apps/api/src/main.ts
+const MAX_FILE_SIZE_MB = 100
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024
 
 interface Meeting {
   id: string
@@ -189,15 +191,17 @@ function FileTypeIcon({ mimeType }: { mimeType: string }) {
 }
 
 function describeUploadError(xhr: XMLHttpRequest): string {
-  let message = ''
+  let code = ''
   try {
-    message = JSON.parse(xhr.responseText)?.message ?? ''
+    code = JSON.parse(xhr.responseText)?.code ?? ''
   } catch {
     // ответ не JSON — используем сообщение по умолчанию
   }
 
-  if (/too large/i.test(message)) return 'Файл слишком большой — максимальный размер 100 МБ'
-  if (/not allowed/i.test(message)) {
+  if (code === 'FILE_TOO_LARGE') {
+    return `Файл слишком большой — максимальный размер ${MAX_FILE_SIZE_MB} МБ`
+  }
+  if (code === 'FILE_TYPE_NOT_ALLOWED') {
     return 'Недопустимый тип файла. Разрешены: видео, аудио, PDF, DOCX, XLSX, PPTX, TXT'
   }
   return 'Не удалось загрузить файл'
@@ -340,7 +344,7 @@ function UploadZone({
             Перетащите файл сюда или нажмите, чтобы выбрать
           </p>
           <p className="text-xs" style={{ color: 'var(--muted)' }}>
-            До 100 МБ · видео, аудио, PDF, DOCX, XLSX, PPTX, TXT
+            До {MAX_FILE_SIZE_MB} МБ · видео, аудио, PDF, DOCX, XLSX, PPTX, TXT
           </p>
         </>
       )}

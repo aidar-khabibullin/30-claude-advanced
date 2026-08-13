@@ -26,7 +26,10 @@ export class UploadFileHandler implements ICommandHandler<UploadFileCommand> {
 
     if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
       await file.file.resume()
-      throw new BadRequestException(`File type ${file.mimetype} is not allowed`)
+      throw new BadRequestException({
+        message: `File type ${file.mimetype} is not allowed`,
+        code: 'FILE_TYPE_NOT_ALLOWED',
+      })
     }
 
     const dir = path.join(UPLOAD_DIR, 'meetings', meetingId, randomUUID())
@@ -38,14 +41,14 @@ export class UploadFileHandler implements ICommandHandler<UploadFileCommand> {
     } catch (err) {
       await fs.promises.rm(dir, { recursive: true, force: true })
       if ((err as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE') {
-        throw new BadRequestException('File is too large')
+        throw new BadRequestException({ message: 'File is too large', code: 'FILE_TOO_LARGE' })
       }
       throw err
     }
 
     if (file.file.truncated) {
       await fs.promises.rm(dir, { recursive: true, force: true })
-      throw new BadRequestException('File is too large')
+      throw new BadRequestException({ message: 'File is too large', code: 'FILE_TOO_LARGE' })
     }
 
     try {
