@@ -217,7 +217,7 @@ describe('MeetingFiles (e2e)', () => {
       noAuthFileId = uploadRes.body.id
     })
 
-    it('403: чужой пользователь не может удалить файл', async () => {
+    it('404: чужой пользователь не может удалить файл', async () => {
       const uploadRes = await request(app.getHttpServer())
         .post(`/meetings/${meetingId}/files`)
         .set('Authorization', `Bearer ${token}`)
@@ -230,7 +230,7 @@ describe('MeetingFiles (e2e)', () => {
       await request(app.getHttpServer())
         .delete(`/meetings/${meetingId}/files/${uploadRes.body.id}`)
         .set('Authorization', `Bearer ${otherToken}`)
-        .expect(403)
+        .expect(404)
     })
 
     it('200: владелец удаляет файл, файл пропадает из списка и с диска', async () => {
