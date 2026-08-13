@@ -3,10 +3,9 @@
 import { Button, Card, Spinner } from '@heroui/react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { API_URL, formatDate } from '@/lib/api'
 import { clearToken, getToken } from '@/lib/auth'
-
-const API_URL = 'http://localhost:3001'
 
 interface Meeting {
   id: string
@@ -84,7 +83,7 @@ function TrashIcon() {
   )
 }
 
-function VideoFileIcon() {
+function FileIconBase({ children }: { children: ReactNode }) {
   return (
     <svg
       width="18"
@@ -97,136 +96,80 @@ function VideoFileIcon() {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <rect x="2" y="5" width="14" height="14" rx="2" />
-      <path d="M16 10l6-3v10l-6-3" />
+      {children}
     </svg>
   )
 }
 
-function AudioFileIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M9 18V5l12-2v13" />
-      <circle cx="6" cy="18" r="3" />
-      <circle cx="18" cy="16" r="3" />
-    </svg>
-  )
-}
+const FILE_TYPE_SHAPES: Array<{ match: (mimeType: string) => boolean; shape: ReactNode }> = [
+  {
+    match: (m) => m.startsWith('video/'),
+    shape: (
+      <>
+        <rect x="2" y="5" width="14" height="14" rx="2" />
+        <path d="M16 10l6-3v10l-6-3" />
+      </>
+    ),
+  },
+  {
+    match: (m) => m.startsWith('audio/'),
+    shape: (
+      <>
+        <path d="M9 18V5l12-2v13" />
+        <circle cx="6" cy="18" r="3" />
+        <circle cx="18" cy="16" r="3" />
+      </>
+    ),
+  },
+  {
+    match: (m) => m.includes('spreadsheet'),
+    shape: (
+      <>
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M3 9h18" />
+        <path d="M3 15h18" />
+        <path d="M9 3v18" />
+      </>
+    ),
+  },
+  {
+    match: (m) => m.includes('presentation'),
+    shape: (
+      <>
+        <rect x="2" y="4" width="20" height="13" rx="2" />
+        <path d="M8 21l4-4 4 4" />
+      </>
+    ),
+  },
+  {
+    match: (m) => m === 'application/pdf' || m.startsWith('text/') || m.includes('wordprocessing'),
+    shape: (
+      <>
+        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+        <path d="M14 2v6h6" />
+        <path d="M9 13h6" />
+        <path d="M9 17h6" />
+      </>
+    ),
+  },
+]
 
-function SpreadsheetFileIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <path d="M3 9h18" />
-      <path d="M3 15h18" />
-      <path d="M9 3v18" />
-    </svg>
-  )
-}
-
-function PresentationFileIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="2" y="4" width="20" height="13" rx="2" />
-      <path d="M8 21l4-4 4 4" />
-    </svg>
-  )
-}
-
-function DocumentFileIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-      <path d="M14 2v6h6" />
-      <path d="M9 13h6" />
-      <path d="M9 17h6" />
-    </svg>
-  )
-}
-
-function GenericFileIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-      <path d="M14 2v6h6" />
-    </svg>
-  )
-}
+const GENERIC_FILE_SHAPE = (
+  <>
+    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+    <path d="M14 2v6h6" />
+  </>
+)
 
 function FileTypeIcon({ mimeType }: { mimeType: string }) {
-  if (mimeType.startsWith('video/')) return <VideoFileIcon />
-  if (mimeType.startsWith('audio/')) return <AudioFileIcon />
-  if (mimeType === 'application/pdf' || mimeType.startsWith('text/')) return <DocumentFileIcon />
-  if (mimeType.includes('wordprocessing')) return <DocumentFileIcon />
-  if (mimeType.includes('spreadsheet')) return <SpreadsheetFileIcon />
-  if (mimeType.includes('presentation')) return <PresentationFileIcon />
-  return <GenericFileIcon />
+  const shape = FILE_TYPE_SHAPES.find(({ match }) => match(mimeType))?.shape ?? GENERIC_FILE_SHAPE
+  return <FileIconBase>{shape}</FileIconBase>
 }
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} Б`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`
   return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`
-}
-
-function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleString('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 function FileRow({
@@ -327,6 +270,11 @@ export function MeetingDetailPage({ meetingId }: { meetingId: string }) {
     load()
   }, [meetingId, router])
 
+  function handleAuthExpired() {
+    clearToken()
+    router.replace('/login')
+  }
+
   async function handleDownload(file: MeetingFile) {
     const token = getToken()
     if (!token) return
@@ -336,6 +284,10 @@ export function MeetingDetailPage({ meetingId }: { meetingId: string }) {
       const res = await fetch(`${API_URL}/meetings/${meetingId}/files/${file.id}/download`, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (res.status === 401) {
+        handleAuthExpired()
+        return
+      }
       if (!res.ok) throw new Error('download failed')
 
       const blob = await res.blob()
@@ -363,6 +315,10 @@ export function MeetingDetailPage({ meetingId }: { meetingId: string }) {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (res.status === 401) {
+        handleAuthExpired()
+        return
+      }
       if (!res.ok) throw new Error('delete failed')
       setFiles((prev) => prev.filter((f) => f.id !== file.id))
     } catch {
