@@ -1,8 +1,10 @@
 'use client'
 
 import { Button, Card, Spinner } from '@heroui/react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { API_URL, formatDate } from '@/lib/api'
 import { clearToken, getEmailFromToken, getToken } from '@/lib/auth'
 
 interface Meeting {
@@ -54,20 +56,11 @@ function UsersIcon() {
   )
 }
 
-function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleString('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
 function MeetingCard({ meeting, highlight }: { meeting: Meeting; highlight?: boolean }) {
   return (
-    <div
-      className="rounded-xl px-4 py-3 flex flex-col gap-1"
+    <Link
+      href={`/meetings/${meeting.id}`}
+      className="rounded-xl px-4 py-3 flex flex-col gap-1 transition-opacity hover:opacity-80"
       style={{
         background: highlight
           ? 'color-mix(in oklch, var(--accent) 10%, transparent)'
@@ -90,7 +83,7 @@ function MeetingCard({ meeting, highlight }: { meeting: Meeting; highlight?: boo
           <span>{meeting.participants.join(', ')}</span>
         </div>
       )}
-    </div>
+    </Link>
   )
 }
 
@@ -110,7 +103,7 @@ export function HomePage() {
 
     setEmail(getEmailFromToken(token))
 
-    fetch('http://localhost:3001/meetings', {
+    fetch(`${API_URL}/meetings`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (res) => {
