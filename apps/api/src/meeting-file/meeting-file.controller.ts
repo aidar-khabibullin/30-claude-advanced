@@ -61,10 +61,11 @@ export class MeetingFileController {
   ) {
     const file = await this.queryBus.execute(new GetFileQuery(meetingId, fileId, req.user.id))
 
+    const fallbackName = file.originalName.replace(/["\\]/g, '_')
     const encodedName = encodeURIComponent(file.originalName)
     res.header(
       'Content-Disposition',
-      `attachment; filename="${encodedName}"; filename*=UTF-8''${encodedName}`,
+      `attachment; filename="${fallbackName}"; filename*=UTF-8''${encodedName}`,
     )
     res.header('Content-Type', file.mimeType)
 

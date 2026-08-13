@@ -23,7 +23,7 @@ export class DeleteFileHandler implements ICommandHandler<DeleteFileCommand> {
       throw new NotFoundException('File not found')
     }
 
-    await this.prisma.meetingFile.delete({ where: { id: file.id } })
     await fs.promises.rm(path.dirname(file.filePath), { recursive: true, force: true })
+    await this.prisma.meetingFile.delete({ where: { id: file.id } })
   }
 }
